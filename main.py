@@ -194,17 +194,7 @@ def perform_ocr():
         doc.save(docx_path)
         
         if output_format.lower() == "pdf":
-            import pythoncom
-            from docx2pdf import convert
-            pythoncom.CoInitialize()
-            pdf_filename = file.filename.rsplit('.', 1)[0] + "_converted.pdf"
-            pdf_path = os.path.join(temp_dir, pdf_filename)
-            convert(docx_path, pdf_path)
-            pythoncom.CoUninitialize()
-            
-            log_history(pdf_filename, "Rupa Kata (Image to Doc)", "Completed", pdf_path)
-            delayed_cleanup(temp_dir)
-            return send_file(pdf_path, as_attachment=True, download_name=pdf_filename, mimetype='application/pdf')
+            return jsonify({"detail": "Konversi ke PDF tidak didukung di Vercel. Harap pilih format DOCX."}), 400
         else:
             log_history(out_filename, "Rupa Kata (Image to Doc)", "Completed", docx_path)
             delayed_cleanup(temp_dir)
@@ -222,29 +212,7 @@ def convert_docx_to_pdf_endpoint():
     if file.filename == '' or not file.filename.endswith('.docx'):
         return jsonify({"detail": "Invalid file type. Please upload a .docx file."}), 400
         
-    try:
-        import pythoncom
-        from docx2pdf import convert
-        
-        pythoncom.CoInitialize()
-        
-        temp_dir = tempfile.mkdtemp()
-        docx_path = os.path.join(temp_dir, file.filename)
-        pdf_filename = file.filename.rsplit('.', 1)[0] + ".pdf"
-        pdf_path = os.path.join(temp_dir, pdf_filename)
-        
-        file.save(docx_path)
-            
-        convert(docx_path, pdf_path)
-        pythoncom.CoUninitialize()
-        
-        log_history(pdf_filename, "Alih Rupa (Word to PDF)", "Completed", pdf_path)
-        delayed_cleanup(temp_dir)
-        return send_file(pdf_path, as_attachment=True, download_name=pdf_filename, mimetype='application/pdf')
-        
-    except Exception as e:
-        log_history(file.filename, "Alih Rupa (Word to PDF)", "Failed", "")
-        return jsonify({"detail": f"Error converting document: {str(e)}"}), 500
+    return jsonify({"detail": "Fitur Word ke PDF saat ini dinonaktifkan karena tidak didukung di server Vercel (Linux)."}), 501
 
 @app.route("/pdf2docx/", methods=["POST"])
 def convert_pdf_to_docx():
@@ -407,24 +375,7 @@ CRITICAL RULES:
         media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         
         if output_format == "pdf":
-            try:
-                import pythoncom
-                from docx2pdf import convert
-                pythoncom.CoInitialize()
-                
-                pdf_filename = file.filename.rsplit('.', 1)[0] + "_ai_edited.pdf"
-                pdf_path = os.path.join(temp_dir, pdf_filename)
-                
-                convert(out_path, pdf_path)
-                
-                out_path = pdf_path
-                out_filename = pdf_filename
-                media_type = 'application/pdf'
-                pythoncom.CoUninitialize()
-            except Exception as e:
-                print(f"PDF Conversion failed: {e}")
-                log_history(file.filename, "Nalar Naskah (AI)", "Failed", "")
-                return jsonify({"detail": f"AI processing succeeded, but PDF conversion failed: {str(e)}"}), 500
+            return jsonify({"detail": "Konversi ke PDF tidak didukung di Vercel. Harap pilih format DOCX."}), 400
         
         log_history(out_filename, "Nalar Naskah (AI)", "Completed", out_path)
         delayed_cleanup(temp_dir)
