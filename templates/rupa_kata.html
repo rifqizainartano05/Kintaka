@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% set active_page = "img2docx" %}
+
+{% block title %}Kintaka - Rupa Kata{% endblock %}
+{% block page_title %}Rupa Kata{% endblock %}
+
+{% block content %}
+<div class="workspace-card" style="display: block;">
+    <div class="workspace-title">Rupa Kata</div>
+    <p class="workspace-subtitle">Extract text using AI and generate a Word or PDF file.</p>
+    
+    <form id="ocr-form">
+        <div class="upload-area" id="ocr-drop" onclick="document.getElementById('ocr-input').click()">
+            <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            <div style="font-weight: 700; color: var(--text-main);">Select Image File</div>
+            <div class="file-name" id="ocr-filename">No file selected</div>
+        </div>
+        <input type="file" id="ocr-input" accept="image/*" onchange="showFileName(this, 'ocr-filename')">
+        
+        <div class="form-group">
+            <label class="form-label" for="ocr-format">Output Format</label>
+            <select id="ocr-format" name="format">
+                <option value="docx">Microsoft Word (.docx)</option>
+                <option value="pdf">Document PDF (.pdf)</option>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn" id="ocr-btn">Extract & Download</button>
+    </form>
+
+    <div class="progress-wrapper" id="ocr-progress-wrapper">
+        <div class="progress-container"><div class="progress-bar" id="ocr-progress-bar"></div></div>
+        <div class="progress-text"><span id="ocr-status-text">Uploading...</span><span id="ocr-percent-text">0%</span></div>
+    </div>
+
+    <div class="result-area" id="ocr-result-area">
+        <svg style="color: #16a34a; margin-bottom: 15px;" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <h3>Extraction Complete!</h3>
+        <p>Text has been successfully extracted from your image.</p>
+        <a id="ocr-download-link" href="#" class="download-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download Document
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    setupDragAndDrop('ocr-drop', 'ocr-input', 'ocr-filename');
+
+    document.getElementById('ocr-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('ocr-input');
+        if (!fileInput.files[0]) return alert('Please select a file first.');
+
+        const btn = document.getElementById('ocr-btn');
+        const progressWrapper = document.getElementById('ocr-progress-wrapper');
+        const resultArea = document.getElementById('ocr-result-area');
+        const downloadLink = document.getElementById('ocr-download-link');
+
+        btn.disabled = true;
+        resultArea.style.display = 'none';
+        
+        document.getElementById('ocr-progress-bar').style.width = '0%';
+        document.getElementById('ocr-status-text').textContent = 'Uploading...';
+        document.getElementById('ocr-percent-text').textContent = '0%';
+        progressWrapper.style.display = 'block';
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        const formatSelect = document.getElementById('ocr-format');
+        let actualOutputName = '_extracted.docx';
+        if (formatSelect) {
+            formData.append('output_format', formatSelect.value);
+            if (formatSelect.value === 'pdf') {
+                actualOutputName = actualOutputName.replace('.docx', '.pdf');
+            }
+        }
+
+        uploadWithProgress('/ocr/', formData, 'ocr', 
+            (xhr) => {
+                const blob = xhr.response;
+                const url = window.URL.createObjectURL(blob);
+                
+                let filename = fileInput.files[0].name.replace(/\.[^/.]+$/, "") + actualOutputName;
+                const contentDisp = xhr.getResponseHeader('Content-Disposition');
+                if (contentDisp && contentDisp.includes('filename=')) {
+                    filename = contentDisp.split('filename=')[1].replace(/"/g, '');
+                }
+
+                downloadLink.href = url;
+                downloadLink.download = filename;
+                downloadLink.click();
+                
+                resultArea.style.display = 'block';
+                progressWrapper.style.display = 'none';
+                btn.disabled = false;
+            },
+            (errorMsg) => {
+                alert('Error: ' + errorMsg);
+                progressWrapper.style.display = 'none';
+                btn.disabled = false;
+            }
+        );
+    });
+{% endblock %}

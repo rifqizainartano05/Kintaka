@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+outputs/
+output_cli/
+firebase_credentials.json
+.env
+node_modules/
