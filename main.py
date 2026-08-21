@@ -13,6 +13,7 @@ import subprocess
 import threading
 import time
 import json
+import base64
 from datetime import datetime
 from PIL import Image
 
@@ -20,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import firebase_admin
-from firebase_admin import credentials, firestore, storage
+from firebase_admin import credentials, firestore
 
 app = Flask(__name__, template_folder="templates")
 CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers=["Content-Disposition"])
@@ -31,44 +32,33 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY", "YOUR_GROQ_API_KEY"))
 
 # Initialize Firebase
 try:
-    bucket_name = os.environ.get('FIREBASE_STORAGE_BUCKET', 'kintaka-c1e74.firebasestorage.app')
     if not firebase_admin._apps:
         # Check if service account key exists
         if os.path.exists('firebase_credentials.json'):
             cred = credentials.Certificate('firebase_credentials.json')
-            firebase_admin.initialize_app(cred, {
-                'storageBucket': bucket_name
-            })
+            firebase_admin.initialize_app(cred)
             print("Firebase initialized with credentials file.")
         else:
             # Fallback to default credentials
-            firebase_admin.initialize_app(options={
-                'storageBucket': bucket_name
-            })
+            firebase_admin.initialize_app()
             print("Firebase initialized with default credentials.")
     db = firestore.client()
-    bucket = storage.bucket()
 except Exception as e:
-    print(f"Warning: Firebase failed to initialize. Make sure you set up firebase_credentials.json and FIREBASE_STORAGE_BUCKET. Error: {e}")
+    print(f"Warning: Firebase failed to initialize. Make sure you set up firebase_credentials.json. Error: {e}")
     db = None
-    bucket = None
 
 def log_history(filename: str, tool_used: str, status: str, local_path: str = ""):
     if db is None:
         print("Firebase is not initialized. Skipping history log.")
         return
     try:
-        download_url = ""
-        if status == "Completed" and local_path and os.path.exists(local_path) and bucket is not None:
+        file_base64 = ""
+        if status == "Completed" and local_path and os.path.exists(local_path):
             try:
-                storage_path = f"history/{int(datetime.now().timestamp())}_{filename}"
-                blob = bucket.blob(storage_path)
-                blob.upload_from_filename(local_path)
-                blob.make_public()
-                download_url = blob.public_url
-                print(f"File uploaded to Firebase Storage: {download_url}")
+                with open(local_path, "rb") as f:
+                    file_base64 = base64.b64encode(f.read()).decode('utf-8')
             except Exception as e:
-                print(f"Failed to upload to Firebase Storage: {e}")
+                print(f"Failed to read file for Firestore: {e}")
 
         date_processed = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         doc_ref = db.collection("history").document()
@@ -77,7 +67,7 @@ def log_history(filename: str, tool_used: str, status: str, local_path: str = ""
             "tool_used": tool_used,
             "date_processed": date_processed,
             "status": status,
-            "download_url": download_url,
+            "file_data": file_base64,
             "timestamp": datetime.now()
         })
     except Exception as e:
@@ -131,8 +121,7 @@ def get_history():
                 "filename": data.get("filename", ""),
                 "tool_used": data.get("tool_used", ""),
                 "date_processed": data.get("date_processed", ""),
-                "status": data.get("status", ""),
-                "download_url": data.get("download_url", "")
+                "status": data.get("status", "")
             })
         return jsonify({"history": history_list})
     except Exception as e:
@@ -152,12 +141,22 @@ def download_history(item_id):
             return jsonify({"detail": "File not found"}), 404
             
         data = doc.to_dict()
-        download_url = data.get("download_url")
+        file_base64 = data.get("file_data")
+        filename = data.get("filename", "downloaded_file")
         
-        if download_url:
-            return redirect(download_url)
+        if file_base64:
+            file_bytes = base64.b64decode(file_base64)
+            return send_file(
+                io.BytesIO(file_bytes),
+                as_attachment=True,
+                download_name=filename,
+                mimetype="application/octet-stream"
+            )
+        elif data.get("download_url"):
+            # Fallback for old history records that still used Firebase Storage
+            return redirect(data.get("download_url"))
         else:
-            return jsonify({"detail": "No download URL available for this file"}), 404
+            return jsonify({"detail": "No file data available for this record"}), 404
             
     except Exception as e:
         return jsonify({"detail": f"Error downloading file: {e}"}), 500
