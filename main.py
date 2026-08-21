@@ -260,37 +260,13 @@ def convert_pdf_to_docx():
         pdf_path = os.path.join(temp_dir, file.filename)
         file.save(pdf_path)
             
-        output_dir = os.path.join(temp_dir, "output")
-        os.makedirs(output_dir, exist_ok=True)
+        from pdf2docx import Converter
+        out_filename = file.filename.rsplit('.', 1)[0] + "_converted.docx"
+        docx_path = os.path.join(temp_dir, out_filename)
         
-        cmd = [
-            "paddleocr",
-            "--image_dir", pdf_path,
-            "--type", "structure",
-            "--recovery", "true",
-            "--use_pdf2docx_api", "true",
-            "--lang", "en",
-            "--output", output_dir
-        ]
-        
-        process = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if process.returncode != 0:
-            return jsonify({"detail": f"PaddleOCR processing failed: {process.stderr}"}), 500
-            
-        docx_path = None
-        for root_dir, dirs, files in os.walk(output_dir):
-            for f in files:
-                if f.endswith('.docx'):
-                    docx_path = os.path.join(root_dir, f)
-                    break
-            if docx_path:
-                break
-                
-        if not docx_path:
-            return jsonify({"detail": "Failed to generate DOCX file."}), 500
-            
-        out_filename = file.filename.rsplit('.', 1)[0] + "_layout_recovered.docx"
+        cv = Converter(pdf_path)
+        cv.convert(docx_path, start=0, end=None)
+        cv.close()
         log_history(out_filename, "Alih Rupa (PDF to Word)", "Completed", docx_path)
         delayed_cleanup(temp_dir)
         return send_file(docx_path, as_attachment=True, download_name=out_filename, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
