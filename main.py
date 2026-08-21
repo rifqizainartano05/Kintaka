@@ -168,8 +168,9 @@ def perform_ocr():
     file = request.files['file']
     if file.filename == '':
         return jsonify({"detail": "No selected file"}), 400
-    if not file.content_type.startswith('image/'):
-        return jsonify({"detail": "Invalid file type. Please upload an image."}), 400
+    
+    # Allow any content type because Flutter http package defaults to octet-stream
+    # if mime type lookup fails.
         
     output_format = request.form.get("output_format", "docx")
     
@@ -193,7 +194,13 @@ def perform_ocr():
         doc.save(docx_path)
         
         if output_format.lower() == "pdf":
-            return jsonify({"detail": "Konversi ke PDF tidak didukung di Vercel. Harap pilih format DOCX."}), 400
+            from docx2pdf import convert
+            pdf_path = docx_path.rsplit('.', 1)[0] + ".pdf"
+            convert(docx_path, pdf_path)
+            pdf_filename = out_filename.replace('.docx', '.pdf')
+            log_history(pdf_filename, "Rupa Kata (Image to PDF)", "Completed", pdf_path)
+            delayed_cleanup(temp_dir)
+            return send_file(pdf_path, as_attachment=True, download_name=pdf_filename, mimetype='application/pdf')
         else:
             log_history(out_filename, "Rupa Kata (Image to Doc)", "Completed", docx_path)
             delayed_cleanup(temp_dir)
@@ -211,15 +218,32 @@ def convert_docx_to_pdf_endpoint():
     if file.filename == '' or not file.filename.endswith('.docx'):
         return jsonify({"detail": "Invalid file type. Please upload a .docx file."}), 400
         
-    return jsonify({"detail": "Fitur Word ke PDF saat ini dinonaktifkan karena tidak didukung di server Vercel (Linux)."}), 501
+    temp_dir = tempfile.mkdtemp()
+    try:
+        docx_path = os.path.join(temp_dir, file.filename)
+        file.save(docx_path)
+        
+        from docx2pdf import convert
+        out_filename = file.filename.rsplit('.', 1)[0] + "_converted.pdf"
+        pdf_path = os.path.join(temp_dir, out_filename)
+        
+        convert(docx_path, pdf_path)
+        log_history(out_filename, "Alih Rupa (Word to PDF)", "Completed", pdf_path)
+        delayed_cleanup(temp_dir)
+        return send_file(pdf_path, as_attachment=True, download_name=out_filename, mimetype='application/pdf')
+        
+    except Exception as e:
+        cleanup_temp_dir(temp_dir)
+        log_history(file.filename, "Alih Rupa (Word to PDF)", "Failed", "")
+        return jsonify({"detail": str(e)}), 500
 
 @app.route("/pdf2docx/", methods=["POST"])
 def convert_pdf_to_docx():
     if 'file' not in request.files:
         return jsonify({"detail": "No file part"}), 400
     file = request.files['file']
-    if file.filename == '' or not file.filename.lower().endswith('.pdf'):
-        return jsonify({"detail": "Invalid file type. Please upload a PDF file."}), 400
+    if file.filename == '':
+        return jsonify({"detail": "No selected file"}), 400
     
     temp_dir = tempfile.mkdtemp()
     
@@ -374,7 +398,7 @@ CRITICAL RULES:
         media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         
         if output_format == "pdf":
-            return jsonify({"detail": "Konversi ke PDF tidak didukung di Vercel. Harap pilih format DOCX."}), 400
+            return jsonify({"detail": "Konversi ke PDF tidak didukung di server ini. Harap pilih format DOCX."}), 400
         
         log_history(out_filename, "Nalar Naskah (AI)", "Completed", out_path)
         delayed_cleanup(temp_dir)
