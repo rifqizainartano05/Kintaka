@@ -1,11 +1,10 @@
 Flask
 Flask-CORS
 firebase-admin
-Pillow==10.2.0
-numpy<2.0.0
+Pillow
+numpy
 python-docx
 pdf2docx
-docx2pdf
 jinja2
 groq
 python-dotenv
