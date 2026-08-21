@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% set active_page = "aiedit" %}
+
+{% block title %}Kintaka - Nalar Naskah{% endblock %}
+{% block page_title %}Nalar Naskah{% endblock %}
+
+{% block content %}
+<div class="workspace-card" style="display: block;">
+    <div class="workspace-title">Nalar Naskah</div>
+    <p class="workspace-subtitle">Rewrite, summarize, or translate your Word Document using Groq LLM.</p>
+    
+    <form id="ai-form">
+        <div class="upload-area" id="ai-drop" onclick="document.getElementById('ai-input').click()">
+            <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <div style="font-weight: 700; color: var(--text-main);">Select Word Document (.docx)</div>
+            <div class="file-name" id="ai-filename">No file selected</div>
+        </div>
+        <input type="file" id="ai-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="showFileName(this, 'ai-filename')">
+        
+        <div class="form-group">
+            <label class="form-label" for="ai-prompt">AI Instruction (Prompt)</label>
+            <textarea id="ai-prompt" name="prompt" placeholder="E.g., Please rewrite this document to sound more professional..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="ai-format">Output Format</label>
+            <select id="ai-format" name="format">
+                <option value="docx">Microsoft Word (.docx)</option>
+                <option value="pdf">Document PDF (.pdf)</option>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn" id="ai-btn">Process with AI</button>
+    </form>
+
+    <div class="progress-wrapper" id="ai-progress-wrapper">
+        <div class="progress-container"><div class="progress-bar" id="ai-progress-bar"></div></div>
+        <div class="progress-text"><span id="ai-status-text">Uploading...</span><span id="ai-percent-text">0%</span></div>
+    </div>
+
+    <div class="result-area" id="ai-result-area">
+        <svg style="color: #16a34a; margin-bottom: 15px;" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <h3>AI Editing Complete!</h3>
+        <p>Your document has been successfully processed by AI.</p>
+        <a id="ai-download-link" href="#" class="download-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download Edited Document
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    setupDragAndDrop('ai-drop', 'ai-input', 'ai-filename');
+
+    document.getElementById('ai-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('ai-input');
+        const promptInput = document.getElementById('ai-prompt');
+        
+        if (!fileInput.files[0]) return alert('Please select a file first.');
+        if (!promptInput.value.trim()) return alert('Please enter an AI instruction.');
+
+        const btn = document.getElementById('ai-btn');
+        const progressWrapper = document.getElementById('ai-progress-wrapper');
+        const resultArea = document.getElementById('ai-result-area');
+        const downloadLink = document.getElementById('ai-download-link');
+
+        btn.disabled = true;
+        resultArea.style.display = 'none';
+        
+        document.getElementById('ai-progress-bar').style.width = '0%';
+        document.getElementById('ai-status-text').textContent = 'Uploading...';
+        document.getElementById('ai-percent-text').textContent = '0%';
+        progressWrapper.style.display = 'block';
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('prompt', promptInput.value);
+        
+        const formatSelect = document.getElementById('ai-format');
+        let actualOutputName = '_ai_edited.docx';
+        if (formatSelect) {
+            formData.append('output_format', formatSelect.value);
+            if (formatSelect.value === 'pdf') {
+                actualOutputName = actualOutputName.replace('.docx', '.pdf');
+            }
+        }
+        
+        uploadWithProgress('/ai-edit/', formData, 'ai', 
+            (xhr) => {
+                const blob = xhr.response;
+                const url = window.URL.createObjectURL(blob);
+                
+                let filename = fileInput.files[0].name.replace(/\.[^/.]+$/, "") + actualOutputName;
+                const contentDisp = xhr.getResponseHeader('Content-Disposition');
+                if (contentDisp && contentDisp.includes('filename=')) {
+                    filename = contentDisp.split('filename=')[1].replace(/"/g, '');
+                }
+
+                downloadLink.href = url;
+                downloadLink.download = filename;
+                downloadLink.click();
+                
+                resultArea.style.display = 'block';
+                progressWrapper.style.display = 'none';
+                btn.disabled = false;
+            },
+            (errorMsg) => {
+                alert('Error: ' + errorMsg);
+                progressWrapper.style.display = 'none';
+                btn.disabled = false;
+            }
+        );
+    });
+{% endblock %}
