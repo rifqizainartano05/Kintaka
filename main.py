@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_file, redirect
+from flask import Flask, request, jsonify, send_file, redirect
 from flask_cors import CORS
 from groq import Groq
 from docx import Document
@@ -22,7 +22,7 @@ load_dotenv()
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 
-app = Flask(__name__, template_folder="templates")
+app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers=["Content-Disposition"])
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY", "YOUR_GROQ_API_KEY"))
@@ -97,22 +97,6 @@ def delayed_cleanup(temp_dir: str):
         time.sleep(5)
         cleanup_temp_dir(temp_dir)
     threading.Thread(target=cleanup).start()
-
-@app.route("/", methods=["GET"])
-def root():
-    return render_template("dashboard.html")
-
-@app.route("/rupa-kata-page", methods=["GET"])
-def rupa_kata_page():
-    return render_template("rupa_kata.html")
-
-@app.route("/alih-rupa-page", methods=["GET"])
-def alih_rupa_page():
-    return render_template("alih_rupa.html")
-
-@app.route("/nalar-naskah-page", methods=["GET"])
-def nalar_naskah_page():
-    return render_template("nalar_naskah.html")
 
 @app.route("/api/history", methods=["GET"])
 def get_history():
